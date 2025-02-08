@@ -72,6 +72,18 @@ head(data)
 ```
 
 ### Data Visualizations
+
+Histogram
+```{r}
+ggplot(data, aes(x = age_years)) +
+  geom_histogram(binwidth = 3) +
+  labs(
+    title = "Age of Congress Distribution",
+    x = 'Age',
+    y = 'Count') + 
+  theme_classic()
+```
+
 Time Series Plot
 ```{r}
 data %>%
