@@ -1,0 +1,246 @@
+---
+title: "DATA607_Week 2 Assignment"
+subtitle: "R and SQL"
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RMySQL)
+library(keyring)
+library(tidyverse)
+library(kableExtra)
+
+knit_table <- function(table_name,  caption, position = 'left') {
+  if (is.data.frame(table_name)) {
+    x = table_name
+  }
+  else {
+    query = paste('SELECT * FROM', table_name)
+    x = dbGetQuery(con, query)
+  }
+  kbl(x, caption=caption, format = "html", table.attr = "style='width:30%;'") |>
+    kable_styling(
+      full_width = F,
+      position = position,
+      bootstrap_options = c("striped")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = "#2d3c52",
+             extra_css = "border: 2px solid #2d3c52;") |>
+    row_spec(dim(x)[1], extra_css = "border-bottom: 2px solid #2d3c52;") |>
+    column_spec(1, extra_css = "border-left: 2px solid #2d3c52;") |>
+    column_spec(dim(x)[2], extra_css = "border-right: 2px solid #2d3c52;")
+}
+
+```
+
+## Overview
+Movie rating data for six recent films was collected from five family members (raters). Each family member was asked to rate each of movies they have seen on a scale of one to five. If a rater had not seen the film in question, a NULL value was put in place of a rating.
+
+
+---
+
+
+## Part 1 & 2: Build Table and Store data in SQL database
+The following SQL queries were used to create normalized movie rating data tables within the MySQL Workbench. The data is stored in the class (cunydata607) MySQL database in the 'olivia.azevedo90' schema.
+```
+-- rater table
+CREATE TABLE rater (
+    person_id VARCHAR(5) UNIQUE,
+    person_name VARCHAR(100) UNIQUE);
+INSERT INTO rater (person_id, person_name) VALUES
+  ('1', 'Neil'),
+  ('2', 'Myles'),
+  ('3', 'Anna'),
+  ('4', 'Brady'),
+  ('5', 'Owen');
+
+-- movies table
+CREATE TABLE movies (
+    movie_id VARCHAR(5) UNIQUE,
+    movie_title VARCHAR(100) UNIQUE
+);
+INSERT INTO movies (movie_id, movie_title) VALUES 
+	('M1', 'Barbie'),
+	('M2', 'Conclave'),
+	('M3', 'Oppenheimer'),
+	('M4', 'Saturday Night'),
+	('M5', 'Smile 2'),
+	('M6', 'Wicked');
+
+-- rates table
+CREATE TABLE rates (
+    person_id VARCHAR(5),
+    movie_id VARCHAR(5),
+    rating INT
+);
+INSERT INTO rates (person_id, movie_id, rating) VALUES
+	-- Person 1
+	('1', 'M3', 5),
+	('1', 'M1', 1),
+	('1', 'M5', NULL),
+	('1', 'M6', 5),
+	('1', 'M2', 4),
+	('1', 'M4', NULL),
+	-- Person 2
+	('2', 'M3', NULL),
+	('2', 'M1', 5),
+	('2', 'M5', 5),
+	('2', 'M6', NULL),
+	('2', 'M2', NULL),
+	('2', 'M4', 4),
+	-- Person 3
+	('3', 'M3', NULL),
+	('3', 'M1', 3),
+	('3', 'M5', 1),
+	('3', 'M6', 5),
+	('3', 'M2', NULL),
+	('3', 'M4', 5),
+	-- Person 4
+	('4', 'M3', 5),
+	('4', 'M1', 2),
+	('4', 'M5', 3),
+	('4', 'M6', NULL),
+	('4', 'M2', NULL),
+	('4', 'M4', NULL),
+	-- Person 5
+	('5', 'M3', 4),
+	('5', 'M1', 3),
+	('5', 'M5', 1),
+	('5', 'M6', 3),
+	('5', 'M2', 5),
+	('5', 'M4', 4);
+```
+
+---
+
+
+## Part 3: Transfer data from SQL database to R dataframe 
+
+### Database Connection
+Define connection string to MySQL database \
+**Note:** To avoid hard coding database credentials, the database password was defined using the `keyring` package and is stored in the keyring store of the operating system. The stored credential can be accessed via the `key_get()` function as seen in the connection string below.
+```{r}
+con = dbConnect(MySQL(),
+          user='olivia.azevedo90',
+          password=key_get("MySQL_PASSWORD"),
+          host='cuny607sql.mysql.database.azure.com',
+          port=3306,
+          dbname='olivia.azevedo90')
+```
+
+### Import Data
+Load normalized data from the SQL database into an R dataframe
+```{r}
+query = '
+  SELECT 
+  	rates.person_id,
+      person_name,
+      rates.movie_id,
+      movie_title,
+      rating
+  FROM rates
+  LEFT JOIN rater
+  	on rates.person_id = rater.person_id 
+  LEFT JOIN movies
+  	on rates.movie_id = movies.movie_id'
+df = dbGetQuery(con, query)
+head(df)
+```
+
+---
+
+
+## Part 4: Missing data strategy 
+
+### Assess Missing Data
+Identify and assess extent of missing values
+```{r, echo=FALSE}
+cat('Total Missing Values: ', sum(is.na(df)), '\n')
+
+df_info = tibble(
+  column = colnames(df),
+  na_count = colSums(is.na(df)),
+  dtype = sapply(df,class))
+knit_table(df_info,  'Column NA Counts and Data Type')
+```
+
+### Missing Data Approach
+My approach to addressing the movie rating missing values involves filling the NA values with zero. I choose this approach due to the missing values being explicit and representing that the person providing the rating did not see the movie.\
+
+Removing the missing values would **not** be the most optimal approach due to:
+
+1. A significant amount of data (30% or 10/30 rows) would be removed from the data
+    + There are no rows in which all the data is missing
+2. The missing values do **not** represent uncollected data or data quality issues
+    + The missing values provide additional insight by indicating the rater has not seen the movie\
+    
+In addition, filling the values with zero converts the rating column data type from integer to numeric. Due to wanting to maintain a numerical data type, the missing values were not filled with a string.\
+Lastly, the missing values were not replaced with a number other than zero (manually or via back/forward filling) since this would cause the data to be inaccurate and not reflect the true movie ratings provided by the raters.
+
+```{r}
+df_nona = df |>
+  mutate(rating = coalesce(rating, 0))
+```
+
+```{r, echo=FALSE}
+df_nona_info = tibble(
+  column = colnames(df_nona),
+  na_count = colSums(is.na(df_nona)),
+  dtype = sapply(df_nona,class))
+knit_table(df_nona_info,  'Column NA Counts and Data Type')
+```
+
+---
+
+
+## Bonus Challenge Questions
+
+<span style='color:#22a298'>
+Are you able to use a password without having to share the password with people who are viewing your code?
+</span>\
+Yes - please refer to the note in the "Database Connection" section
+
+<span style='color:#22a298'>
+Can you create a normalized set of tables that corresponds to the relationship between your movie viewing friends and the movies being rated?
+</span>\
+I created a normalized set of tables by splitting my original table into three tables: raters, movies, and rates.
+
+* raters
+  + Columns: person_id, person_name
+* movies
+  + Columns: movie_id, movie_title
+  + Updates: created movie id column to make the movie title dependent on a primary key
+* rates
+  + Columns: person_id, movie_id, rating
+  + Updates: assigned the ratings to a person id and movie id to remove transitive partial dependency
+
+
+### Normalized Tables
+
+```{r, echo=FALSE}
+knit_table('rater', 'Table: rater', 'float_left')
+knit_table('movies',  'Table: movies', 'float_left')
+knit_table('rates',  'Table: rates', 'float_left')
+```
+
+### NonNormalized Table
+
+```{r, echo=FALSE}
+knit_table('movie_rates', 'Table: movie_rates', 'left')
+```
+
+
+
+
+
