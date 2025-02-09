@@ -140,7 +140,7 @@ con = dbConnect(MySQL(),
 ```
 
 ### Import Data
-Load normalized data from the SQL database into an R dataframe
+Load normalized data from the SQL database into an R data frame
 ```{r}
 query = '
   SELECT 
@@ -231,16 +231,160 @@ I created a normalized set of tables by splitting my original table into three t
 ```{r, echo=FALSE}
 knit_table('rater', 'Table: rater', 'float_left')
 knit_table('movies',  'Table: movies', 'float_left')
-knit_table('rates',  'Table: rates', 'float_left')
+knit_table('rates',  'Table: rates', 'right')
 ```
 
-### NonNormalized Table
+### Non-Normalized Table
 
 ```{r, echo=FALSE}
 knit_table('movie_rates', 'Table: movie_rates', 'left')
 ```
 
+---
+
+
+## Exploratory Data Analysis
+
+### Movie Rating Distribution Plots
+
+Overall Rating Distribution
+```{r}
+df_nona |>
+  group_by(rating) |>
+  tally() |>
+  ggplot(aes(x = rating, y = n)) +
+    geom_col() +
+    labs(
+      title = "Movie Rating Distribution",
+      x = 'Rating',
+      y = 'Count') + 
+    theme_classic()
+```
+
+Rating Distribution by Rater
+```{r}
+df_nona |>
+  group_by(rating,  person_name) |>
+  tally() |>
+  ggplot(aes(x = rating, y = n, fill=person_name)) +
+    geom_col(position = position_dodge2(width = 0.9, preserve = "single")) +
+    labs(
+      title = "Movie Rating Distribution by Rater",
+      x = 'Rating',
+      y = 'Count') + 
+    theme_classic()
+```
+
+
+### Movie Rating Plots
+
+All Movie Ratings by Rater
+```{r}
+df_nona |>
+  filter(rating >=1) |>
+  ggplot(
+    aes(x = movie_title, y = rating, fill=person_name)) +
+    geom_col(position = position_dodge2(width = 0.9, preserve = "single")) +
+    labs(
+      title = "Movie Rating Distribution by Rater",
+      x = 'Movie',
+      y = 'Rating') + 
+    theme_classic()
+```
+
+
+Average Movie Rating
+```{r}
+df_nona |>
+  group_by(movie_title) |>
+  summarise(avg_ratings = mean(rating)) |>
+  ggplot(
+    aes(x = reorder(movie_title, -avg_ratings), y = avg_ratings)) +
+    geom_col(fill='#2d3c52') +
+    labs(
+      title = "Average Movie Rating",
+      x = 'Movie',
+      y = 'Average Rating') + 
+    theme_classic()
+```
+
+Average Movie Rating by Rater
+```{r}
+df_nona |>
+  group_by(person_name) |>
+  summarise(avg_ratings = mean(rating)) |>
+  ggplot(
+    aes(x = reorder(person_name, -avg_ratings), y = avg_ratings)) +
+    geom_col(fill='#557874') +
+    labs(
+      title = "Rater Average Movie Rating",
+      x = 'Rater',
+      y = 'Average Rating') + 
+    theme_classic()
+```
 
 
 
+### Movies Watched Plots
+
+Movies Watched Distribution
+```{r}
+df_nona |>
+  filter(rating >=1) |>
+  group_by(movie_title) |>
+  tally() |>
+  ggplot(
+    aes(x = reorder(movie_title, -n), y = n)) +
+    geom_col(fill='#2d3c52') +
+    labs(
+      title = "Movies Watched Distribution",
+      x = 'Movie',
+      y = 'Watched Count') + 
+    theme_classic()
+```
+
+Movies Watched by Rater Distribution
+```{r}
+df_rater_n = df_nona |>
+  filter(rating >=1) |>
+  group_by(person_name) |>
+  tally()
+
+  ggplot(df_rater_n,
+    aes(x = reorder(person_name, -n), y = n)) +
+    geom_col(fill='#557874') +
+    labs(
+      title = "Movies Watched by Rater Distribution",
+      x = 'Movie',
+      y = 'Watched Count') + 
+    theme_classic()
+```
+
+### Movie Rating & Movies Watched Plot
+
+Average Rating per the Number of Movies Watched by the Rater
+```{r}
+merge(df_nona, df_rater_n) |>
+  group_by(n) |>
+  summarise(avg_ratings = mean(rating)) |>
+  ggplot(
+    aes(x = reorder(n, -avg_ratings), y = avg_ratings)) +
+  geom_col(fill='#2d3c52') +
+  labs(
+      title = "Average Rating per Number of Movies Watched",
+      x = "Number of Movie's Watched",
+      y = 'Average Rating') + 
+    theme_classic()
+```
+
+---
+
+## Conclusions
+Due to this data set being so small and having many missing rating values, there is not enough evidence to draw any meaningful conclusions. Some potential insights include:
+
+* The number of movie's watched being positively correlated to movie ratings
+* The movie Barbie being the most highly rated movie of the six movies included in the survey
+  + **Note:** This is most likely influenced by the movie Barbie being the only movie that all raters watched and provided a rating for
+
+To improve this analysis, I would recommend collecting more movie ratings via surveying a much larger population. A much larger data set will provide a better representation of overall movie ratings, as well as provide opportunity to apply a different approach to addressing missing rating values. 
 
