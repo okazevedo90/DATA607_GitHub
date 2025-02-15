@@ -1,0 +1,220 @@
+---
+title: "DATA607_Week 3 Assignment"
+subtitle: 'Normalization & Character Manipulation'
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+<hr style="border:1px solid #2d3c52">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(randomNames)
+
+color_str <- function(x, color='#2d3c52') {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color,
+      x)
+  } else x
+}
+
+knit_table <- function(df,  caption, position = 'left') {
+  kbl(df, caption=caption, format = "html", table.attr = "style='width:30%;'") |>
+    kable_styling(
+      full_width = F,
+      position = position,
+      bootstrap_options = c("striped", "condensed")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = "#2d3c52",
+             extra_css = "border: 2px solid #2d3c52;") |>
+    row_spec(dim(df)[1], extra_css = "border-bottom: 2px solid #2d3c52;") |>
+    column_spec(1, extra_css = "border-left: 2px solid #2d3c52;") |>
+    column_spec(dim(df)[2], extra_css = "border-right: 2px solid #2d3c52;")
+}
+```
+
+## Overview
+The following assignment demonstrates data normalization and character manipulation. Data normalization organizes data in a consistent way and to reduce redundancy and ensure data integrity. Character manipulation is an essential skill needed to clean and transform character data.
+
+<hr style="border:1px solid #2d3c52">
+
+## Normalization
+
+### Question 1
+
+College course data was synthetically generated to create four dataframes that demonstrate normalization. The dataframes include student, course, department, and teacher related info in third normal form.
+A seed was set to ensure reproducible generated data results .
+
+```{r}
+set.seed(789)
+student_df = data.frame(
+  STUDENT_ID = sprintf("S%02d", 1:30),
+  COURSE_ID = sample(c("D101", "D102", "D103", "N101", "N102", "N103"), 30, replace = TRUE),
+  STUDENT_FIRST_NAME = randomNames(30, which.names="first"),
+  STUDENT_LAST_NAME = randomNames(30, which.names="last")
+)
+
+course_df = data.frame(
+  COURSE_ID = c("D101", "D102", "D103", "N101", "N102", "N103"),
+  DEPARTMENT_ID = c("DEPT1", "DEPT1", "DEPT1", "DEPT2", "DEPT2", "DEPT2"),
+  TEACHER_ID = c("T1", "T1", "T2", "T3", "T4", "T5"),
+  COURSE_NAME = c("Data Analytics", "Stats", "Machine Learning","Chemistry", "Biology", "Pharmacology")
+)
+
+teacher_df = data.frame(
+  TEACHER_ID =c ("T1", "T2", "T3", "T4", "T5"),
+  TEACHER_FIRST_NAME = randomNames(5, which.names="first"),
+  TEACHER_LAST_NAME = randomNames(5, which.names="last"),
+  TEACHER_CONTACT = sample(1234567:87654321, 5)
+)
+
+department_df = data.frame(
+  DEPARTMENT_ID = c("DEPT1", "DEPT2"),
+  DEPARTMENT_NAME = c("Data Analytics", "Nursing")
+)
+
+join_df = left_join(student_df, course_df, by = join_by(COURSE_ID))
+join_df = left_join(join_df, teacher_df, by = join_by(TEACHER_ID))
+join_df = left_join(join_df, department_df, by = join_by(DEPARTMENT_ID))
+join_df = join_df |>
+  select(STUDENT_ID, STUDENT_FIRST_NAME, STUDENT_LAST_NAME,
+         COURSE_ID, COURSE_NAME, TEACHER_ID, TEACHER_FIRST_NAME,
+         TEACHER_LAST_NAME, TEACHER_CONTACT, DEPARTMENT_ID, DEPARTMENT_NAME)
+```
+
+#### Normalized Dataframes
+```{r, echo=FALSE}
+knit_table(student_df, 'Student Dataframe', 'left')
+knit_table(course_df, 'Course Dataframe', 'left')
+knit_table(teacher_df, 'Teacher Dataframe', 'left')
+knit_table(department_df, 'Department Dataframe', 'left')
+```
+
+#### Joined Normalized Dataframes
+```{r, echo=FALSE}
+knit_table(join_df, 'All Joined Dataframe (scroll to view all columns and rows)', 'left') |>
+  scroll_box(width = "800px", height = '600px', box_css = "border: 0px solid #000000; padding: 0px; ")
+```
+
+
+<hr style="border:1px solid #2d3c52">
+
+## Character Manipulation
+
+### Question 2
+
+#### Import Data 
+Read in college majors csv file as data frame
+```{r}
+cm_df = read.csv("https://raw.githubusercontent.com/fivethirtyeight/data/refs/heads/master/college-majors/majors-list.csv")
+```
+\
+#### College Major String Pattern Match
+Identifies the majors that contain either "DATA" or "STATISTICS"
+```{r}
+pat_df = cm_df |> 
+  filter(str_detect(Major, "DATA|STATISTICS")) |>
+  select(Major)
+colnames(pat_df) = c('Majors that contain either \"DATA\" or \"STATISTICS\"')
+```
+
+```{r, echo=F}
+knit_table(pat_df, '')
+```
+
+
+---
+
+
+### Question 3
+
+Descriptions for five regular expressions have been provided below. Each expression description includes a write up on what the expression will match with supporting examples.
+
+
+#### `(.)\1\1`
+This regex will match strings that contain 3 identical consecutive characters.
+
+* **`r color_str('Breakdown: ', '#22a298')`**
+  + `(.)` matches any single character
+  + `\1` is a back reference to the first captured group
+* **`r color_str('Examples: ', '#22a298')`** '111', 'aaa'\
+\
+
+#### `"(.)(.)\\2\\1"`
+This is a string that represents a regex which matches strings with any 2 characters followed by the second character and first character repeated in that order.
+
+* **`r color_str('Breakdown: ', '#22a298')`**
+  + The first `(.)` matches any single character and represents the first captured group
+  + The second `(.)` again matches any single character and represents the second captured group
+  + These captured groups are then back referenced with the `\\2` referring to the second captured group and `\\1` referring to the first captured group.
+* **`r color_str('Examples: ', '#22a298')`** '1221', 'abba', '3333'\
+\
+
+#### `(..)\1`
+This regex will match strings with a repeated pair of characters.
+
+* **`r color_str('Breakdown: ' ,'#22a298')`**
+  + `(..)`  matches any 2 characters and represents the first captured group
+  + `\1` is a back reference to the first captured group.
+* **`r color_str('Examples: ' ,'#22a298')`** '1212', 'abab', 'cccc'\
+\
+
+#### `"(.).\\1.\\1"`
+This is a string that represents a regex which matches strings with any character repeated in 3 places if a single character is in between the repeated characters.
+
+* **`r color_str('Breakdown: ' ,'#22a298')`**
+  + `(.)` matches any single character and represents the first captured group
+  + `.`   matches any single character
+  + `\\1` is a back reference referring to the first captured group
+* **`r color_str('Examples: ', '#22a298')`** '12131', 'abaca', 'dddd'\
+\
+
+
+#### `"(.)(.)(.).*\\3\\2\\1"`
+This is a string that represents a regex which matches strings with any 3 characters followed by an optional character that can be repeated 0 or more times. The pattern ends with same first 3 characters being repeated in reverse order. 
+
+* **`r color_str('Breakdown: ' ,'#22a298')`**
+  + `(.)` matches any single character and creates a captured group. This is repeated 3 times; thus, three captured groups are defined
+  + `.*`  optionally matches any character with a repeat (i.e. it matches any number of times, including 0).
+  + `\\3\\2\\1` are back references referring to the third, second, and first captured group characters respectively 
+* **`r color_str('Examples: ' ,'#22a298')`** '123321', 'abcdddddddcba'\
+
+---
+
+
+
+### Question 4
+
+Regex to match words that start and end with the same character\
+**`r color_str('Regex: ' ,'#22a298')`** `^(.).*\\1$`
+
+Test on `words` character vector
+```{r}
+str_subset(words, "^(.).*\\1$")
+```
+Regex to match words that contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)\
+**`r color_str('Regex: ' ,'#22a298')`** `([a-zA-Z]{2}).*\\1`
+
+Test on `words` character vector
+```{r}
+str_subset(words, "([a-zA-Z]{2}).*\\1")
+```
+
+Regex to match words that contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)\
+**`r color_str('Regex: ' ,'#22a298')`** `([a-zA-Z])(.*\\1){2,}`
+
+Test on `words` character vector
+```{r}
+str_subset(words, "([a-zA-Z])(.*\\1){2,}")
+```
