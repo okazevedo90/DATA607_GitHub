@@ -1,0 +1,376 @@
+---
+title: "DATA607_Week 4 Assignment"
+subtitle: 'Tidying and Transforming Data'
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+<hr style="border:1px solid #2d3c52">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(bookdown)
+
+color_str <- function(x, color='#2d3c52') {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color,
+      x)
+  } else x
+}
+
+knit_table <- function(df, caption, position = 'left') {
+  kbl(df, caption=caption, format = "html", escape = FALSE , table.attr = "style='width:30%;'") |>
+    kable_styling(
+      full_width = F,
+      position = position,
+      bootstrap_options = c("striped", "condensed")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = "#2d3c52",
+             extra_css = "border: 2px solid #2d3c52;") |>
+    row_spec(dim(df)[1], extra_css = "border-bottom: 2px solid #2d3c52;") |>
+    column_spec(1, extra_css = "border-left: 2px solid #2d3c52;") |>
+    column_spec(dim(df)[2], extra_css = "border-right: 2px solid #2d3c52;")
+}
+```
+
+## Overview
+
+A CSV file containing needed data was created and uploaded to GitHub. The data includes on time and delayed arrival counts for two airlines across five destinations. This r packages `tidyr` and `dplyr` were used to tidy and transform data for analysis. Data analysis was performed to assess and compare the arrival delays for the two airlines present in the data. The analysis provides an example of Simpson's Paradox, a phenomenon in which a trend appears in several groups of data but disappears or reverses when the groups are combined.
+
+
+<hr style="border:1px solid #2d3c52">
+
+
+## Import Data
+Read in csv file as data frame and fill blank strings as NA values
+```{r}
+df <- suppressWarnings(read.csv("https://raw.githubusercontent.com/okazevedo90/DATA607_GitHub/refs/heads/main/DATA607_Assignment4Data.csv", header = T, na.strings = c("")))
+```
+
+
+<hr style="border:1px solid #2d3c52">
+
+
+## Tidy and Transform Data
+
+### Fill Missing Values
+Forward fill NA airline values 
+```{r}
+df <- df |>
+  fill(Airline)
+```
+
+
+### Pivot Data
+Pivot data into tidy form via lengthening the data to transform the 5 destination arrival count columns into two columns, `Destination` and `Delay_Count`. Pivoting the data in this way makes each observation a row and each column a variable; thus, making the data tidy.
+```{r}
+long_df <- df |>
+  pivot_longer(
+    cols = c("Los_Angeles", "Phoenix", "San_Diego", "San_Franciso", "Seattle"),
+    names_to = "Destination",
+    values_to = "Delay_Count"
+  ) |> 
+  transform(Destination = str_replace(Destination, "_", " "))
+```
+
+<hr style="border:1px solid #2d3c52">
+
+
+## Data Analysis
+
+### Airline Arrival Counts
+
+**Total Airline Arrival Counts**
+```{r}
+long_df |>
+  group_by(Airline, Delay_Type) |>
+  summarise(Delay_Count_Sum = sum(Delay_Count), .groups = "keep") |>
+  ggplot(aes(x = Delay_Type, y = Delay_Count_Sum, fill = Airline)) +
+  geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+  scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+  labs(
+    title = "Total Airline Arrivals",
+    x = "Arrival Type",
+    y = "Arrival Count",
+    fill = "Airline"
+  ) +
+  theme_classic() + 
+  theme(
+    axis.text.x = element_text(size = 11),
+    plot.title = element_text(size = 14, face = "bold"))
+```
+
+\
+**Total Airline Arrival Counts by Destination**
+```{r AirlineDes, fig.cap="Total Airline Arrival Counts by Destination"}
+long_df |>
+  group_by(Destination, Delay_Type) |>
+  ggplot(aes(x = Destination, y = Delay_Count, fill = Airline)) +
+  geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+  facet_wrap(~Delay_Type) +
+  labs(
+    title = "Total Airline Arrivals by Destination",
+    x = "Destination",
+    y = "Arrival Count",
+    fill = "Airline"
+  ) +
+  scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+  theme_classic() + 
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+    plot.title = element_text(size = 14, face = "bold"))
+```
+
+\
+
+### Airline Arrivals Distribution
+
+**Airline Arrival Distribution per Total Airline Arrivals** \
+`r color_str('Example Interpretation: ','#22a298')` About 13% of all Alaska airline arrivals are delayed
+```{r}
+airline_prcts =  long_df |>
+    group_by(Airline) |>
+    mutate(Airline_Total_Count = sum(Delay_Count)) |>
+    group_by(Airline, Delay_Type) |>
+    mutate(Airline_Delay_Count = sum(Delay_Count)) |>
+    mutate(Airline_Delay_Percent = round(Airline_Delay_Count / Airline_Total_Count, 4) * 100) |>
+    distinct(Airline, Delay_Type, Airline_Delay_Count, Airline_Total_Count, Airline_Delay_Percent)
+  
+airline_prcts |>
+  ggplot(aes(x = Delay_Type, y = Airline_Delay_Percent, fill = Airline)) +
+    geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+    scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+    labs(
+      title = "Airline Arrival Distribution per Total Airline Arrivals",
+        x = "Arrival Type",
+        y = "Arrival Count",
+        fill = "Airline"
+    ) +
+    theme_classic() + 
+    theme(
+    axis.text.x = element_text(size = 11),
+    plot.title = element_text(size = 14, face = "bold"))
+```
+
+```{r AirlineCnts, echo=FALSE}
+knit_table (
+  airline_prcts |>
+  ungroup() |>
+  filter(Delay_Type == 'Delayed') |>
+  mutate(Airline_Delay_Percent = cell_spec(
+    Airline_Delay_Percent, "html",
+    background = ifelse(
+      Airline_Delay_Percent == max(Airline_Delay_Percent), "yellow", ''))) |>
+  mutate(Airline = cell_spec(
+    Airline, "html",
+    background = ifelse(
+      Airline_Delay_Percent == max(Airline_Delay_Percent), "yellow", ''))
+    ),
+  'Delayed Airline Arrival Distribution Counts per Airline')
+```
+
+
+\
+**Airline Arrivals Distribution per Total Airline Arrivals & Destination** \
+`r color_str('Example Interpretation: ','#22a298')` About 29% of AM West Seattle arrivals are delayed 
+```{r}
+airline_dest_prcts = long_df |>
+  group_by(Airline, Destination) |>
+  mutate(Airline_Dest_Total_Count = sum(Delay_Count)) |>
+  group_by(Airline, Destination, Delay_Type) |>
+  mutate(Airline_Dest_Delay_Percent = round(Delay_Count / Airline_Dest_Total_Count, 4) * 100) |>
+  distinct(Airline, Destination, Delay_Type, Delay_Count, Airline_Dest_Total_Count, Airline_Dest_Delay_Percent)
+
+ airline_dest_prcts |>
+  ggplot(aes(x = Destination, y = Airline_Dest_Delay_Percent, fill = Airline)) +
+    geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+    scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+    labs(
+      title = "Airline Arrival Distribution per Total Airline Arrivals & Destination",
+      x = "Destination",
+      y = "Percent of Airline Arrivals",
+      fill = "Airline"
+    ) +
+    facet_wrap(~Delay_Type) +
+    theme_classic() + 
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+    plot.title = element_text(size = 14, face = "bold"))
+```
+
+```{r DistAirlineDes, echo=FALSE}
+knit_table (
+  airline_dest_prcts |>
+  ungroup() |>
+  group_by(Destination) |>
+  filter(Delay_Type == 'Delayed') |>
+  mutate(Airline_Dest_Delay_Percent = cell_spec(
+    Airline_Dest_Delay_Percent, "html",
+    background = ifelse(
+      Airline_Dest_Delay_Percent == max(Airline_Dest_Delay_Percent), "yellow", ''))) |>
+  mutate(Airline = cell_spec(
+    Airline, "html",
+    background = ifelse(
+      Airline_Dest_Delay_Percent == max(Airline_Dest_Delay_Percent), "yellow", ''))
+    ),
+  'Delayed Airline Arrival Distribution Counts per Airline & Destination')
+
+```
+
+
+
+\
+**Airline Arrivals per Total Arrival Type** \
+`r color_str('Example Interpretation: ','#22a298')` AM West accounts for about 61% of all delays and 66% of on time arrivals for all AM West and Alaska arrivals
+```{r ArrType, fig.cap="Airline Arrivals per Total Arrival Type"}
+delay_prcts = long_df |>
+  group_by(Delay_Type) |>
+  mutate(Delay_Type_Total_Count = sum(Delay_Count)) |>
+  group_by(Airline, Delay_Type) |>
+  mutate(Airline_Delay_Count = sum(Delay_Count)) |>
+  mutate(Delay_Type_Percent = round(Airline_Delay_Count / Delay_Type_Total_Count, 4) * 100) |>
+  distinct(Airline, Delay_Type, Airline_Delay_Count, Delay_Type_Total_Count, Delay_Type_Percent)
+
+delay_prcts |>
+  ggplot(aes(x = Delay_Type, y = Delay_Type_Percent, fill = Airline)) +
+    geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+    scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+    labs(
+      title = "Airline Arrival Distribution per Total Arrival Types",
+      x = "Arrival Type",
+      y = "Percent of Arrival Types",
+      fill = "Airline"
+    ) +
+    theme_classic() + 
+    theme(
+        axis.text.x = element_text(size = 11),
+        plot.title = element_text(size = 14, face = "bold"))
+```
+
+```{r, echo=FALSE}
+knit_table (
+  delay_prcts |>
+  ungroup(Airline) |>
+  filter(Delay_Type == 'Delayed') |>
+  mutate(Delay_Type_Percent = cell_spec(
+    Delay_Type_Percent, "html",
+    background = ifelse(
+      Delay_Type_Percent == max(Delay_Type_Percent), "yellow", ''))) |>
+  mutate(Airline = cell_spec(
+    Airline, "html",
+    background = ifelse(
+      Delay_Type_Percent == max(Delay_Type_Percent), "yellow", ''))
+    ),
+  'Delayed Airline Arrival Distribution Counts per Arrival Type')
+```
+
+
+
+\
+**Airline Arrivals per Total Arrival Types & Destination** \
+`r color_str('Example Interpretation: ','#22a298')` AM West accounts for about 97% of all delayed Phoenix arrivals for both airlines
+
+```{r}
+delay_des_prcts = long_df |>
+  group_by(Destination, Delay_Type) |>
+  mutate(Total_Delay_Type_Counts = sum(Delay_Count)) |>
+  group_by(Airline, Destination, Delay_Type) |>
+  mutate(Total_Des_Delay_Counts = sum(Delay_Count)) |> 
+  mutate(Delay_Des_Percent = round(Total_Des_Delay_Counts / Total_Delay_Type_Counts, 4) * 100) |>
+  distinct(Airline, Destination, Delay_Type, Total_Des_Delay_Counts, Total_Delay_Type_Counts, Delay_Des_Percent) 
+
+delay_des_prcts |>
+  ggplot(aes(x = Destination, y = Delay_Des_Percent, fill = Airline)) +
+    geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+    scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+    labs(
+      title = "Airline Arrival Distribution per Total Arrival Types & Destination",
+      x = "Destination",
+      y = "Percent of Arrivals",
+      fill = "Arrival Delay Type"
+    ) +
+    facet_wrap(~Delay_Type) +
+    theme_classic() + 
+  theme(
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        plot.title = element_text(size = 14, face = "bold"))
+```
+
+```{r ArrTypeCnts, echo=FALSE}
+knit_table (
+  delay_des_prcts |>
+  ungroup(Airline) |>
+  filter(Delay_Type == 'Delayed') |>
+  mutate(Delay_Des_Percent = cell_spec(
+    Delay_Des_Percent, "html",
+    background = ifelse(
+      Delay_Des_Percent == max(Delay_Des_Percent), "yellow", ''))) |>
+  mutate(Airline = cell_spec(
+    Airline, "html",
+    background = ifelse(
+      Delay_Des_Percent == max(Delay_Des_Percent), "yellow", ''))
+    ),
+  'Delayed Airline Arrival Distribution Counts per Arrival Type')
+```
+
+\
+**Airline Arrivals Percent Difference per Total Arrival Types & Destination (differences from above plot)** \
+`r color_str('Example Interpretation: ','#22a298')` Alaska airline has a Seattle on time arrival rate about 80% greater than the AM West Seattle on time arrival rate.
+```{r PrctDiff, fig.cap='Airline Arrivals Percent Difference per Total Arrival Types & Destination'}
+delay_des_prcts |>
+  ungroup() |>
+  group_by(Destination, Delay_Type) |>
+  mutate(Des_Delay_Prct_Diff = abs(diff(Delay_Des_Percent))) |>
+  filter(Delay_Des_Percent == max(Delay_Des_Percent)) |>
+  distinct(Airline, Destination, Delay_Type, Delay_Des_Percent, Des_Delay_Prct_Diff) |>
+  ggplot(aes(x = Destination, y = Des_Delay_Prct_Diff, fill = Airline)) +
+    geom_col(position = position_dodge2(width = 0.3, preserve = "single")) +
+    scale_fill_manual(values = c("tomato1", 'steelblue')) + 
+    facet_wrap(~Delay_Type) +
+   labs(
+      title = "Airline Arrivals Percent Different per Total Arrival Types & Destination",
+      x = "Destination",
+      y = "Arrival Percent Difference",
+      fill = "Airline"
+    ) +
+    theme_classic() + 
+    theme(
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        plot.title = element_text(size = 14, face = "bold"))
+```
+
+
+
+<hr style="border:1px solid #2d3c52">
+
+## Conclusions
+This analysis illustrates an example of Simpson's Paradox or a statistical phenomenon that occurs when a trend in data reverses when the data is broken down into subgroups.
+
+When comparing Alaska and AM West airline arrival delays per each respective airline, the results display that Alaska has more delayed arrivals, with 13% of Alaska arrivals being delayed (see Table \@ref(tab:AirlineCnts)). 
+However, when taking into account arrival destination, the delayed arrival percentages reveal that AM West has a higher rate of delays for every arrival destination. 
+
+*`r color_str('The paradoxical conclusion is that AM West has more arrival delays for each arrival destination, yet Alaska appears to have overall more delays when considering all destinations at the same time.', '#22a298')`*
+
+This paradox happens because two effects occur together:
+
+1. The sizes of the groups, which are combined when destination is ignored, are very different. The totals are dominated by AM West Phoenix arrivals (accounts for 73% of AM West arrivals) and Alaska Seattle arrivals (accounts for 57% of Alaska arrivals). See Figure \@ref(fig:AirlineDes).
+     + In addition, AM West has a much larger sample size accounting for about 61% of all delays and 66% of on time arrivals across both airlines. See Figure \@ref(fig:ArrType).
+
+2. The arrival destination, has a large effect on arrival delay rates regardless of the airline. Each airline experiences low and high delay rates for the same destination, i.e. San Francisco has the highest delay rate for both Alaska and AM West airlines. See Table \@ref(tab:DistAirlineDes).
+
+Analyzing arrivals by percent of delays per destination provides further insight. AM West has a higher delay rate for 4/5 destinations as well as higher on time rates for 3/5 destinations. Conversely, Alaska has a higher delay rate for only 1/5 destinations and higher on time rates for 2/5 destinations. See Figure \@ref(fig:PrctDiff). 
+In addition, the airline with the highest delay rate per destination also has the highest on time rate for each respective destination except for San Francisco. San Francisco is the only destination in which one airline (AM West) has a higher percentage of delays and the other airline (Alaska) has the higher percentage of on time arrivals. See Table \@ref(tab:ArrTypeCnts).
+
+To continue this analysis I would recommend weighting the Alaska airline delay counts and reassess if Simpson's paradox is still present given the adjusted group sizes. 
+
+
