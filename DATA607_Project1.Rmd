@@ -1,0 +1,163 @@
+---
+title: "DATA607 Project 1"
+subtitle: "Data Analysis"
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+
+knit_table <- function(df, position = 'left') {
+  kbl(df, format = "html", escape = FALSE) |>
+    kable_styling(
+      full_width = T,
+      position = position,
+      bootstrap_options = c("striped")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = "#2d3c52",
+             extra_css = "border: 2px solid #2d3c52;") |>
+  scroll_box(width = "800px", height = '250px',
+             extra_css = "border-bottom: 2px solid #2d3c52; border-left: 2px solid #2d3c52; border-right: 2px solid #2d3c52;")
+}
+```
+
+## Overview
+The goal of this project is to transform, clean, and tidy a delimited text file with chess tournament results. The resulting data is output into a csv file containing the following columns as needed: Player Name, Player State, Total Number of Points, Player Pre-Rating, and Average Pre Chess Rating of Opponents.
+
+<hr style="border:1px solid #2d3c52">
+
+## Data Analysis
+
+### Import Data
+**Read in txt file as data frame**
+
+* Define field separator character
+* Define column names
+```{r}
+data = read.delim("https://raw.githubusercontent.com/okazevedo90/DATA607_GitHub/refs/heads/main/tournamentinfo.txt",
+             header = FALSE, sep = "|", skip = 4,
+             col.names = c('Num', 'Player', 'Pts', 'Round_1', 'Round_2', 'Round_3', 'Round_4', 'Round_5', 'Round_6', 'Round_7', 'NA'))
+```
+```{r, echo=FALSE}
+knit_table(data)
+```
+
+\
+
+### Clean Data
+
+* Filter out not needed rows and columns
+* Remove leading and trailing white space on all character type columns
+```{r}
+df = data |>
+  filter(!str_detect(Num, "-")) |>
+  mutate_if(is.character, str_trim) |>
+  select(-last_col())
+```
+```{r, echo=FALSE}
+knit_table(df)
+```
+
+\
+
+### Tidy & Transform Data
+**Make each observation a single row rather than two**
+
+* Create subset data frame containing first row of data per player 
+* Create subset data frame containing second row of data per player 
+    + Extract player pre-rating value from string using regex pattern match
+    + Subset to only needed columns and rename
+* Concatenate subset data frames by column
+```{r}
+df_num = df |>
+  filter(str_detect(Num, '\\d'))
+
+df_state = df |>
+  filter(!str_detect(Num, '\\d')) |>
+  mutate(Pre_Rating = str_match(Player, ":\\s*(\\d*)\\S*\\s*->")[,2]) |>
+  select(Num, Pre_Rating) |>
+  setNames(c('State','Pre_Rating'))
+
+df = cbind(df_num, df_state)
+```
+```{r, echo=FALSE}
+knit_table(df)
+```
+
+\
+
+**Make each variable a column**
+
+* Pivot data to transform the seven chess round result columns into two columns: name and value
+```{r}
+df = df |>
+  pivot_longer(
+    cols = starts_with("Round"),
+    names_to = "Round",
+    values_to = 'Result',
+    names_prefix = 'Round_'
+  )
+```
+```{r, echo=FALSE}
+knit_table(df)
+```
+
+\
+
+**Prep data to allow for calculation of Average Pre Chess Rating of Opponents**
+
+* Create subset data frame containing the player ID and pre-rating value for each player
+* Extract the opponent ID value from string using regex pattern match
+* Join subset data frame on player ID and opponent ID to create an opponent pre-rating value column
+```{r}
+rate_df = df |> 
+  distinct(Num, Pre_Rating) |>
+  mutate(Pre_Rating = as.integer(Pre_Rating)) |>
+  setNames(c('Opponent','Opp_Pre_Rating'))
+
+df = df |>
+  mutate(Opponent = str_match(Result, "\\s*(\\d+)")[,2])
+
+df = left_join(df, rate_df, by = join_by(Opponent))
+```
+```{r, echo=FALSE}
+knit_table(df)
+```
+
+\
+
+**Final Data Handling**
+
+* Create Average Pre Chess Rating of Opponents per player column
+* Subset to only needed columns and remove duplicates
+* Adjust column data types
+```{r}
+df = df |>
+  group_by(Num) |>
+  mutate(Avg_Opp_Rate = round(mean(Opp_Pre_Rating, na.rm = TRUE))) |>
+  ungroup() |>
+  distinct(Player, State, Pts, Pre_Rating, Avg_Opp_Rate) |>
+  mutate_at(c('Pts', 'Pre_Rating'), as.numeric)
+```
+```{r, echo=FALSE}
+knit_table(df)
+```
+
+\
+
+### Output Data
+Write out data frame as csv file
+```{r}
+write.csv(df, "tournamentinfo_cleaned.csv", row.names = F)
+```
+
