@@ -1,0 +1,187 @@
+---
+title: "DATA607_Week 7 Assignment"
+subtitle: 'File Formats'
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+library(jsonlite)
+library(xmlconvert)
+library(arrow)
+library(tableHTML)
+library(kableExtra)
+
+knit_table <- function(df, position = 'left') {
+  kbl(df, format = "html", escape = FALSE) |>
+    kable_styling(
+      full_width = T,
+      position = position,
+      bootstrap_options = c("striped")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = "#2d3c52",
+             extra_css = "border: 2px solid #2d3c52;") |>
+    row_spec(dim(df)[1], extra_css = "border-bottom: 2px solid #2d3c52;") |>
+    column_spec(1, extra_css = "border-left: 2px solid #2d3c52;") |>
+    column_spec(2, width='24em') |>
+    column_spec(dim(df)[2], extra_css = "border-right: 2px solid #2d3c52;")
+}
+```
+
+## Overview
+Delimited text retail inventory data was provided to prepare for analysis by formatting it in JSON, HTML, XML, and Parquet. An overview of the pros and cons of each of these file formats is also included.
+
+<hr style="border:1px solid #2d3c52">
+
+
+## Generate Data
+Create string of all data provided without the first header row
+```{r}
+txt_data = '
+Electronics,Smartphone,101,TechBrand,699.99,101-A,Color: Black, Storage: 64GB
+Electronics,Smartphone,101,TechBrand,699.99,101-B,Color: White, Storage: 128GB
+Electronics,Laptop,102,CompuBrand,1099.99,102-A,Color: Silver, Storage: 256GB
+Electronics,Laptop,102,CompuBrand,1099.99,102-B,Color: Space Gray, Storage: 512GB
+Home Appliances,Refrigerator,201,HomeCool,899.99,201-A,Color: Stainless Steel, Capacity:20 cu ft
+Home Appliances,Refrigerator,201,HomeCool,899.99,201-B,Color: White, Capacity: 18 cu ft
+Home Appliances,Washing Machine,202,CleanTech,499.99,202-A,Type: Front Load, Capacity:4.5 cu ft
+Home Appliances,Washing Machine,202,CleanTech,499.99,202-B,Type: Top Load, Capacity:5.0 cu ft
+Clothing,T-Shirt,301,FashionCo,19.99,301-A,Color: Blue, Size: S
+Clothing,T-Shirt,301,FashionCo,19.99,301-B,Color: Red, Size: M
+Clothing,T-Shirt,301,FashionCo,19.99,301-C,Color: Green, Size: L
+Clothing,Jeans,302,DenimWorks,49.99,302-A,Color: Dark Blue, Size: 32
+Clothing,Jeans,302,DenimWorks,49.99,302-B,Color: Light Blue, Size: 34
+Books,Fiction Novel,401,-,14.99,401-A,Format: Hardcover, Language: English
+Books,Fiction Novel,401,-,14.99,401-B,Format: Paperback, Language: Spanish
+Books,Non-Fiction Guide,402,-,24.99,402-A,Format: eBook, Language: English
+Books,Non-Fiction Guide,402,-,24.99,402-B,Format: Paperback, Language: French
+Sports Equipment,Basketball,501,SportsGear,29.99,501-A,Size: Size 7, Color: Orange
+Sports Equipment,Tennis Racket,502,RacketPro,89.99,502-A,Material: Graphite, Color: Black
+Sports Equipment,Tennis Racket,502,RacketPro,89.99,502-B,Material: Aluminum, Color: Silver'
+```
+
+
+Input text data into data frame, define column names, and merge the last two Variation_Details columns since this column was incorrectly separated when transformed into a data table as result of this column including a comma
+```{r}
+df = read.table(
+  text = txt_data,
+  sep = ',',
+  header = FALSE,
+  col.names = c(
+    'Category', 'Item_Name', 'Item ID', 'Brand',
+    'Price', 'Variation_ID', 'Variation_Details_1',
+    'Variation_Details_2'))
+
+df = df |>
+  unite('Variation_Details', 'Variation_Details_1', 'Variation_Details_2', sep = ", ")
+```
+
+
+\
+
+## JSON
+Prepare and output JSON file from data frame
+```{r}
+json_data = toJSON(df, pretty=T)
+write(json_data, file = "DATA607_Week 7 Assignment_JSON.json")
+json_data
+```
+
+\
+
+## XML
+Prepare and output XML file from data frame
+```{r}
+df_to_xml(
+  df, fields="tags",
+  record.tag = "Item", root.node='Inventory',
+  xml.file = "DATA607_Week 7 Assignment_XML.xml")
+```
+
+
+\
+
+## HTML
+Prepare and output HTML table from data frame
+```{r}
+html_data = df |>
+  tableHTML(
+    rownames=F,
+    border=1,
+    widths = rep(150, ncol(df)),    ) |>
+  add_css_header(css = list(
+    c('background-color', 'color'),
+    c('#2d3c52', 'white')
+    ), headers = 1:ncol(df)) |>
+  add_css_row(css = list(
+    c('font-family', 'font-size'),
+    c('arial', '14px'))) 
+write(html_data, file = "DATA607_Week 7 Assignment_HTML.html")
+html_data
+```
+
+\
+
+## Parquet
+Prepare and output parquet file from data frame
+```{r}
+write_parquet(df, sink = "DATA607_Week 7 Assignment_PARQUET.parquet")
+parquet_data = read_parquet("DATA607_Week 7 Assignment_PARQUET.parquet")
+parquet_data
+```
+
+<hr style="border:1px solid #2d3c52">
+
+## Conclusions
+```{r, echo=FALSE}
+parquet_pros = '
+* Efficent encoding allows for smaller file sizes and faster files
+* Stores record data types
+* Files are “column-oriented” and “chunked” which typically leads to better performance and more efficient analysis'
+parquet_cons = '
+  * Not “human readable”
+  * Not all programming languages or applications may support it'
+  
+json_pros = '
+  * Widely compatible and adopted across web technologies and APIs
+    * Ideal for representing simple hierarchical data structures'
+json_cons = '
+  * No native way to represent dates or date-times
+      * Impercise rules for representing floating point numbers
+      * less optimal and readable for large/complex datasets'
+
+html_pros = '
+* Standard language for most web pages 
+    * Universally supported across browsers and tools'
+html_cons = '
+  * Inefficient for structured data handling or data transfer purposes 
+      * Relies on CSS and JavaScript for the final presentation'
+
+xml_pros = "* Text-based and human readable
+* Suitable for detailed datasets due to hierarchical data structure
+* Consistent format for data exchange"
+xml_cons = "
+* Less efficient for large datasets compared 
+  * Doesn't have built-in support for numbers, dates, or other complex data types
+  * Can be slower to parse and process, especially for large datasets
+  * Harder to understand and parse with heavily nested architectures"
+  
+knit_table(
+  tibble(
+    File_Format = c('Parquet', 'JSON', 'XML', 'HTML'),
+    PROS = c(parquet_pros, json_pros, xml_pros, html_pros),
+    CONS = c(parquet_cons, json_cons, xml_cons, html_cons)
+  )
+)
+```
+
