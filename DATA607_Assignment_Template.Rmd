@@ -1,0 +1,79 @@
+---
+title: "DATA607_Assignment Template"
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+#2d3c52
+#557874
+#22a298
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+knit_table <- function(df, caption='', position = 'left', color = '#2d3c52') {
+  kbl(df, format = "html", escape = FALSE, caption = caption) |>
+    kable_styling(
+      full_width = F,
+      position = position,
+      bootstrap_options = c("striped")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = color,
+             extra_css = paste("border: 2px solid", color, ";")) |>
+    row_spec(dim(df)[1], extra_css = paste("border-bottom: 2px solid", color, ";")) |>
+    column_spec(1, extra_css = paste("border-left: 2px solid", color, ";")) |>
+    column_spec(dim(df)[2], extra_css = paste("border-right: 2px solid", color, ";")) |>
+    scroll_box(width = "100%", height = '450px', box_css = "border: 1px solid #FFFFFF;")
+}
+
+color_str <- function(x, color='#22a298') {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color,
+      x)
+  } else x
+}
+```
+
+## Overview
+Overview Text
+\
+**Citation:**
+
+<hr style="border:1px solid #2d3c52">
+
+## Data
+
+### Import Data
+Read in csv file as data frame
+```{r}
+data <- read.csv("")
+```
+
+### Data Handling
+- Adjust data types
+- text
+```{r}
+
+```
+
+### heading
+text
+```{r}
+
+```
+
+<hr style="border:1px solid #2d3c52">
+
+## Conclusions
+text
+
