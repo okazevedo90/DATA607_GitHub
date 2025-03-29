@@ -1,0 +1,173 @@
+---
+title: "DATA607_Week 9 Assignment"
+subtitle: 'Web APIs'
+author: "Olivia Azevedo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+
+#2d3c52 #557874 #22a298 ---
+
+```{css, include=FALSE}
+<!-- .tocify .tocify-header { -->
+<!--     position: fixed; -->
+<!--     top: 30px; -->
+<!--     left: 30px; -->
+<!--     width: 150px; -->
+<!--     height: 150px; -->
+<!-- } -->
+
+/* TOC column - move to left edge */
+/* https://medium.com/@TheAtlasTeam/fixed-width-sidebars-in-bootstrap-6bd83db75669 */
+div.row>div:not(div+div) {
+  position: fixed;
+  left: 0px;
+}
+/* TOC container within the TOC column - make narrower */
+#TOC {
+  max-width: 150px !important;
+  width: 150px !important;
+}
+
+.main-container {
+  max-width: 100%;
+  <!-- margin-left: auto; -->
+  <!-- margin-right: auto; -->
+}
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(httr2)
+library(keyring)
+library(jsonlite)
+library(dplyr)
+library(kableExtra)
+library(purrr)
+
+knit_table <- function(df, caption='', position = 'left', color = '#2d3c52') {
+  kbl(df, format = "html", escape = FALSE, caption = caption) |>
+    kable_styling(
+      full_width = F,
+      position = position,
+      bootstrap_options = c("striped")) |>
+    row_spec(0, bold = T,
+             color = "white",
+             background = color,
+             extra_css = paste("border: 2px solid", color, ";")) |>
+    row_spec(dim(df)[1], extra_css = paste("border-bottom: 2px solid", color, ";")) |>
+    column_spec(1, extra_css = paste("border-left: 2px solid", color, ";")) |>
+    column_spec(dim(df)[2], extra_css = paste("border-right: 2px solid", color, ";")) |>
+    scroll_box(width = "100%", height = '450px', box_css = "border: 1px solid #FFFFFF;")
+}
+
+color_str <- function(x, color='#22a298') {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color,
+      x)
+  } else x
+}
+```
+
+## Overview
+
+This assignment creates an interface to pull data from the [Developer New York Times API web site](<https://developer.nytimes.com/apis>) via the `httr2` package. Specifically, the "Most Popular" API was selected to request and output the most popular articles on NYTimes.com based on emails, shares, or views. The Most Popular API JSON data response is transformed into an R DataFrame and is displayed along with supporting info in the API request.
+
+<hr style="border:1px solid #2d3c52">
+
+## API Functions
+
+### API Request Function
+Function to request article data from Most Popular NYT API from the specified previous number of days and API scope.  The returned JSON response data is transformed into an R dataframe. Function checks to ensure response specific parameters meet the allowed parameter requirements and returns text explaining why if not.
+
+**`r color_str('Parameters')`**:
+
+* `r color_str(' api_key (character)')`: user specific NYT Most Popular API Key string
+* period (int): number of previous days in which most popular NYT article data is returned for
+  + values: 1, 7, or 30
+* scope (character): api scope of for getting the most popular NYT articles
+  + values: 
+      - viewed: most viewed articles within the last (x) days
+      - shared: most shared articles on Facebook within the last (x) days
+      - emailed: most emailed within the last (x) days
+
+**`r color_str('Returns')`**:  
+
+  * if correct parameters input: dataframe of JSON API response NYT article data
+    for the parameters input
+  * if wrong parameters input: text explaining parameter error
+
+
+```{r}
+nyt_pop_api_resp_df = function(api_key, period, scope) {
+  # period and scope input error handling
+  if (period %in% c(1, 7, 30) & scope %in% c('viewed', 'emailed', 'shared')) {
+    request_url = paste0(
+      'https://api.nytimes.com/svc/mostpopular/v2/',scope,'/')
+    # api request
+    req = request(request_url) |>
+      req_url_path_append(paste0(period,'.json')) |>
+      req_url_query('api-key' = api_key) |>
+      req_perform() 
+    # apt response 
+    resp = req |>
+      resp_body_json(
+        flatten = T,
+        simplifyDataFrame=T
+        )
+    # crete api info table
+     info = tibble(
+        Most_Popular_API_Status = resp$status,
+        Scope = scope,
+        Days_Period = period,
+        Article_Count = resp$num_results,
+        Source = substr(resp$copyright, 15, 45)
+        )
+    # response df data handling
+    df = resp$results |>
+      select(published_date, updated, title, section, subsection, adx_keywords, byline, type, url)
+    print(knit_table(df))
+    return(df)
+  }
+  # error return
+  return(error = "INPUT ERROR: input period value is not 1, 7, or 30 or input scope value is not 'viewed', 'emailed', or 'shared'")
+}
+```
+
+### API Response Data Handling Function
+Function to subset API response data by object and columns.
+
+
+### API Response Info Function
+Function to create dataframe with general API request and response information.
+
+
+
+
+
+```{r results='asis'}
+api_key = key_get('NYT_Popular_API_Key')
+
+for (s in c('viewed', 'shared'
+            # 'emailed'
+            )) {
+  for (p in c(1, 7
+              # , 30
+              )) {
+    resp_df = nyt_pop_api_resp_df(api_key, p, s)
+    df_txt = paste('API Response Data - Most<b>', s, '</b>articles for the last', p, 'day(s)')
+    info_txt = paste('API Response Info - Most', s, 'articles for the last', p, 'day(s)')
+    Sys.sleep(12)
+    print(df_txt)
+  }
+}
+```
