@@ -12,7 +12,7 @@ output:
 
 ## Overview
 
-Demonstrate tidying text data and performing text processing via lexicon-based sentiment analysis. The corpus used for this assignment is a collection of SMS messages tagged as spam or legitimate. The files contain one message per line. Each line is composed by two columns:
+Demonstrates tidying text data and performing text processing via lexicon-based sentiment analysis. The corpus used for this assignment is a collection of SMS messages tagged as spam or legitimate. The files contain one message per line. Each line is composed by two columns:
 
   * spam_flag: contains the label (ham or spam)
   * text: contains the raw text.
@@ -36,8 +36,8 @@ spam_colors = c("Spam" = "tomato", "Legitimate" = "steelblue")
 
 ## Load Data
 ```{r}
-data = read.csv('~/Documents/CUNY/Spring 2025/DATA607/DATA607_GitHub/spam.csv')
-slang_ref = read.csv('~/Documents/CUNY/Spring 2025/DATA607/DATA607_GitHub/slang.csv')
+data = read.csv('https://raw.githubusercontent.com/okazevedo90/DATA607_GitHub/refs/heads/main/weekly_assignments/text_mining/spam.csv')
+slang_ref = read.csv('https://raw.githubusercontent.com/okazevedo90/DATA607_GitHub/refs/heads/main/weekly_assignments/text_mining/slang.csv')
 ```
 
 ### Create Stop Word DataFrame
@@ -62,15 +62,18 @@ custom_stop_words = bind_rows(
 * Join and replace common text slang / abbreviations with english meaning
 * Unnest SMS words again to account for any slang replacements that are more than one word
 ```{r}
+data$text = iconv(data$text, to = "ASCII", sub = "")
+
+
 df = data |>
   mutate(
     id = row_number(),
     spam_flag = ifelse(spam_flag == 'ham', 'Legitimate', 'Spam'),
     # Remove html characters
-    text = str_replace_all(
+    text = str_replace_all(str_replace_all(
       str_replace_all(
         str_replace_all(
-          text, '&amp', ''), '&gt', ''), '&lt', '')
+          text, '&amp', ''), '&gt', ''), '&lt', ''), "’", "'")
         ) |>
   unnest_tokens(slang, text) |>
   left_join(slang_ref, by = join_by(slang)) |>
